@@ -1,0 +1,26 @@
+nRF	2
+h	7560	7560
+RoQ	73	73
+NC	9	5
+QL	334116	334116
+Vq	5812988	-5812988
+Vs	277714	277714
+nBunch	630
+nPB0	316740012699
+R_ring	610.1754
+GMTSQ	750.76
+pRad0	9.75e6
+Gamma0	19600
+maxIter	20000
+nIb	1
+n_df	50	50
+nMu	1
+nOmegaGuess	111
+dfMin	-15000	-15000
+dfMax	15000	15000
+ps	24
+epsilon	1e-8
+max_step	1000
+sig1	1e-7
+sig2	1e-7
+n_thread	8
