@@ -59,7 +59,7 @@ std::complex<double> Z(double R,double Q, double omega0,std::complex<double> ome
 
     return R*omegas/(omegas+1i*Q*(omega0-omegas*omegas/omega0));
 }
-std::complex<double> Err(int ps,int nRF, int i,int nBunch,int mu,
+std::complex<double> Err(int ps,int nRF, int i,int nBunch,int mu,int m,
                         std::vector<std::vector<std::complex<double>>> &p_omegas,
                         std::vector<std::vector<std::vector<std::complex<double>>>> &Zs,
                         std::vector<std::complex<double>> &temp,
@@ -76,37 +76,37 @@ std::complex<double> Err(int ps,int nRF, int i,int nBunch,int mu,
 #pragma omp parallel for simd schedule(simd: static)
 #pragma vector always
 #pragma ivdep
-        for(int j = 0; j<ps; ++j){
-            p_omegas[i][j] = ((-(ps-1)/2+j)*nBunch+mu)*omega0+OMEGA_Init;
+        for(int j = 0; j<ps*2; ++j){
+            p_omegas[i][j] = ((-ps+j)*nBunch+mu)*omega0+OMEGA_Init;
             Zs[i][j][iRF] = Z(R[iRF],QL[iRF],omegac[iRF],p_omegas[i][j]);
         }
     }
     
     for(int iRF= 0; iRF<nRF; ++iRF){
-        for(int j = 0; j<ps; ++j){
-            temp[i]+=p_omegas[i][j]*Zs[i][j][iRF];
+        for(int j = 0; j<ps*2; ++j){
+            temp[i]+=pow(p_omegas[i][j]/omega0,2*m-1)*Zs[i][j][iRF];
         }
     }
     temp[i] *= factor*1i;
     //std::cout<<"RHS :"<<temp[i]<<std::endl;
-    return OMEGA_Init*OMEGA_Init-omegas*omegas-temp[i];
+    return (OMEGA_Init*OMEGA_Init-omegas*omegas*m*m-temp[i])/omegas;
 }
 
 std::complex<double> ApproxOMEGA(std::vector<std::complex<double>> &OMEGA_Init0,std::vector<std::complex<double>> &OMEGA_Init, double mu, double nRF, double factor,
                                     std::vector<double> &R, std::vector<double> &QL,std::vector<double> &omegac,
                                     double nPar,double r0,double eta, double Gamma0,double T0,double Qs, double f0, double omega0, double omegas,
-                                    double epsilon, int ps, int nBunch,int maxIter){
+                                    double epsilon, int ps, int nBunch,int maxIter,int m ){
     std::vector<std::complex<double>> temp(OMEGA_Init.size(),std::complex<double>(0,0));
-    std::vector<std::vector<std::vector<std::complex<double>>>> Zs(OMEGA_Init.size(),std::vector<std::vector<std::complex<double>>>(ps,std::vector<std::complex<double>>(nRF,std::complex<double>(0,0))));
-    std::vector<std::vector<std::complex<double>>> p_omegas(OMEGA_Init.size(),std::vector<std::complex<double>>(ps,std::complex<double>(0,0))); // the frequency points where we sample the impedance 
+    std::vector<std::vector<std::vector<std::complex<double>>>> Zs(OMEGA_Init.size(),std::vector<std::vector<std::complex<double>>>(ps*2,std::vector<std::complex<double>>(nRF,std::complex<double>(0,0))));
+    std::vector<std::vector<std::complex<double>>> p_omegas(OMEGA_Init.size(),std::vector<std::complex<double>>(ps*2,std::complex<double>(0,0))); // the frequency points where we sample the impedance 
     
-    return -Err(ps,nRF,0,nBunch,mu,p_omegas,Zs,temp,R,QL,omegac,omegas,omega0,omegas,factor)/2.0/omegas;
+    return -Err(ps,nRF,0,nBunch,mu,m,p_omegas,Zs,temp,R,QL,omegac,omegas,omega0,omegas,factor)/2.0/omegas;
 }
 std::complex<double> NSolveOMEGA(std::vector<std::complex<double>> &OMEGA_Init0,std::vector<std::complex<double>> &OMEGA_Init, 
                                     double mu, double nRF, double factor,
                                     std::vector<double> &R, std::vector<double> &QL,std::vector<double> &omegac,
                                     double nPar,double r0,double eta, double Gamma0,double T0,double Qs, double f0, double omega0, double omegas,
-                                    double epsilon, int ps, int nBunch,int maxIter){
+                                    double epsilon, int ps, int nBunch,int maxIter,int m){
     std::vector<std::complex<double>> err(OMEGA_Init.size(),std::complex<double>(1e10,0));
     std::vector<std::complex<double>> err1(OMEGA_Init.size(),std::complex<double>(1e10,0));
     std::vector<std::complex<double>> err2(OMEGA_Init.size(),std::complex<double>(1e10,0));
@@ -130,8 +130,8 @@ std::complex<double> NSolveOMEGA(std::vector<std::complex<double>> &OMEGA_Init0,
     //std::complex<double> sig1 = 0.1;
     //std::complex<double> sig2 = 0.1i;
     std::vector<std::complex<double>> temp(OMEGA_Init.size(),std::complex<double>(0,0));
-    std::vector<std::vector<std::vector<std::complex<double>>>> Zs(OMEGA_Init.size(),std::vector<std::vector<std::complex<double>>>(ps,std::vector<std::complex<double>>(nRF,std::complex<double>(0,0))));
-    std::vector<std::vector<std::complex<double>>> p_omegas(OMEGA_Init.size(),std::vector<std::complex<double>>(ps,std::complex<double>(0,0))); // the frequency points where we sample the impedance 
+    std::vector<std::vector<std::vector<std::complex<double>>>> Zs(OMEGA_Init.size(),std::vector<std::vector<std::complex<double>>>(ps*2,std::vector<std::complex<double>>(nRF,std::complex<double>(0,0))));
+    std::vector<std::vector<std::complex<double>>> p_omegas(OMEGA_Init.size(),std::vector<std::complex<double>>(ps*2,std::complex<double>(0,0))); // the frequency points where we sample the impedance 
     std::complex<double> OMEGA_result(0,0);
     
     double maxImOMEGA = -1e300;
@@ -146,13 +146,13 @@ std::complex<double> NSolveOMEGA(std::vector<std::complex<double>> &OMEGA_Init0,
         OMEGA_2[i] = OMEGA_Init[i];
         while (abs(errRe[i]+1i*errIm[i])>epsilon & nIter<maxIter){
             OMEGA_1[i] = OMEGA_Init[i];
-            err[i] = Err(ps,nRF,i,nBunch,mu,p_omegas,Zs,temp,R,QL,omegac,OMEGA_Init[i],omega0,omegas,factor);
+            err[i] = Err(ps,nRF,i,nBunch,mu,m,p_omegas,Zs,temp,R,QL,omegac,OMEGA_Init[i],omega0,omegas,factor);
             errRe[i] = real(err[i]);
             errIm[i] = imag(err[i]);
-            err1[i] = Err(ps,nRF,i,nBunch,mu,p_omegas,Zs,temp,R,QL,omegac,OMEGA_Init[i]+sig1,omega0,omegas,factor);
+            err1[i] = Err(ps,nRF,i,nBunch,mu,m,p_omegas,Zs,temp,R,QL,omegac,OMEGA_Init[i]+sig1,omega0,omegas,factor);
             dErr11[i] = (real(err1[i])-errRe[i])/abs(sig1);
             dErr21[i] = (imag(err1[i])-errIm[i])/abs(sig2);
-            err2[i] = Err(ps,nRF,i,nBunch,mu,p_omegas,Zs,temp,R,QL,omegac,OMEGA_Init[i]+sig2,omega0,omegas,factor);
+            err2[i] = Err(ps,nRF,i,nBunch,mu,m,p_omegas,Zs,temp,R,QL,omegac,OMEGA_Init[i]+sig2,omega0,omegas,factor);
             dErr12[i] = (real(err2[i])-errRe[i])/abs(sig1);
             dErr22[i] = (imag(err2[i])-errIm[i])/abs(sig2);
             det[i] = dErr11[i]*dErr22[i]-dErr21[i]*dErr12[i];
@@ -192,7 +192,7 @@ std::complex<double> NSolveOMEGA(std::vector<std::complex<double>> &OMEGA_Init0,
         std::cout<<"Final OMEGA = "<<OMEGA_Init[i]<<std::endl;
 #endif
     }
-    std::cout<<"Got one. "<<std::endl;
+    //std::cout<<"Got one. "<<std::endl;
     // at least return the first result. 
     OMEGA_result = OMEGA_Init[0];
     // find the OMEGA that has the largest imaginary part.
@@ -204,9 +204,21 @@ std::complex<double> NSolveOMEGA(std::vector<std::complex<double>> &OMEGA_Init0,
             idx = i;
         }
     }
-    std::cout<<"Final Error = "<<err[idx]<<std::endl;
-    std::cout<<"Final OMEGA = "<<OMEGA_Init[idx]<<std::endl;
+    //std::cout<<"Final Error = "<<err[idx]<<std::endl;
+    //std::cout<<"Final OMEGA = "<<OMEGA_Init[idx]<<std::endl;
     return OMEGA_result;
+}
+double Fact(int N){
+    if(N==0){
+        return 1;
+    }
+    else{
+        int temp=1;
+        for(int i = 1;i<=N;++i){
+            temp*=i;
+        }
+        return temp;
+    }
 }
 int main(){
     std::cout.precision(17);
@@ -235,10 +247,13 @@ int main(){
     double Gamma0 = 19600;
     double detuneMin = 0;
     double detuneMax = 0;//opt_Detune+1e4;
+    double sig_z=2.3e-3; // rms bunch length in unit of seconds
+
     int maxIter = 30; // total number of iteration for convergency.
     int nIb = 10; // number samples for Ib
     int nDetune = 1; // number of samples for Detune
-    int nMu = 2;//nBunch; // number of modes to invesitgate. 
+    int nMu = 2;// number of modes to invesitgate. 
+    int m = 1;// the type of the coupled bunch mode, 1 is dipole, 2 is quad...
     int nOmegaGuess = 11;
     int ps = nBunch; //2*nBunch+1; // number of frequency samples, actually is 2*ps+1
     
@@ -440,6 +455,13 @@ int main(){
                 std::cout<<nMu<<std::endl;
                 break;
             }
+            if (substr == "m"){
+                std::cout<<substr<< ":\t";
+                getline(ss, substr, '\t');
+                m = stod(substr);
+                std::cout<<m<<std::endl;
+                break;
+            }
             if (substr == "nOmegaGuess"){
                 std::cout<<substr<< ":\t";
                 getline(ss, substr, '\t');
@@ -489,6 +511,13 @@ int main(){
                 std::cout<<OMP_NUM_THREADS<<std::endl;
                 break;
             }
+            if (substr == "sig_z"){
+                std::cout<<substr<< ":\t";
+                getline(ss, substr, '\t');
+                sig_z = stod(substr);
+                std::cout<<sig_z<<std::endl;
+                break;
+            }
         }
     }
 
@@ -504,10 +533,11 @@ int main(){
     double omega0 = f0*2*pi;
     double T0 = 1/f0;
     double omegarf = f0*h[0]*2*pi;
-    
+    double sig_t = sig_z/c_light;
+    double sig_phi = omega0*sig_t;
     double r0 = (qe*qe)/(me*c_light*c_light);
     double eta = 1/GMTSQ-1/(Gamma0*Gamma0);
-
+    ps = int(5*sqrt(2)/sig_t/nBunch/omega0);
     double nPerBunch0 = NperBunch;
 
     double IbDC0 = nPerBunch0*f0*qe*nBunch;
@@ -519,12 +549,21 @@ int main(){
     for(int i = 0;i<nRF;++i){
         Vqtot+=Vq[i]*NC[i];
     }
+    std::cout<<"eta : "<<eta<<std::endl;
+    std::cout<<"h : "<<h[0]<<std::endl;
+    std::cout<<"Ek : "<<Ek<<std::endl;
+    std::cout<<"sig_t : "<<sig_t<<std::endl;
+    std::cout<<"omega0 : "<<omega0<<std::endl;
+
+    std::cout<<"ps : "<<ps<<std::endl;
+
     Qs = sqrt(h[0]*eta*Vqtot/(2*pi*Ek));
     
     double omegas = Qs*f0*2*pi;
     
     
     std::cout<<"nRF : "<<nRF<<std::endl;
+    std::cout<<"f0 : "<<f0<<std::endl;
     std::cout<<"Qs : "<<Qs<<std::endl;
 
     std::vector<double> nPerBunch(nIb,0);
@@ -555,7 +594,7 @@ int main(){
         nPerBunch[i] = nPerBunch0/nIb*(i+1);
         IbDC[i] = nPerBunch[i]*qe*f0*nBunch;
         pRad[i] = pRad0/IbDC0*IbDC[i];
-        factor[i] = nBunch*nPerBunch[i]*r0*eta/Gamma0/T0/T0;
+        factor[i] = nBunch*nPerBunch[i]*r0*eta/Gamma0/T0/T0/T0*4*pi*m/Fact(m-1)/pow(2,m)*pow(sig_phi,2*m-2);
         for (int j = 0; j<nRF; ++j){
             Q[i][j] = Vc[j]*Vc[j]/(RoQ_Acc[j]*pRad[i]);
             R[i][j] = RoQ[j]*Q[i][j]*NC[j];
@@ -587,7 +626,7 @@ int main(){
 
     // initialize the initial guess for OMEGA
     for (int i = 0;i < nOmegaGuess; ++i){
-        OMEGA_init0[i] = omegas*exp(1i/std::complex<double>(nOmegaGuess*i*2.0*pi));//-1i*1.5*omegas;
+        OMEGA_init0[i] = omegas*exp(1i/std::complex<double>(nOmegaGuess)*std::complex<double>((i-int(nOmegaGuess/2))*1.0*pi));//-1i*1.5*omegas;
         OMEGA_init[i] = OMEGA_init0[i];
         std::cout<<OMEGA_init[i]<<std::endl;
     }
@@ -600,28 +639,29 @@ int main(){
             for(int  j = 0; j < nDetune; ++j){
                 std::vector<std::complex<double>> OMEGA_init(nOmegaGuess,std::complex<double>(0,0)); // initial guess for OMEGA, for calculation
                 //std::cout<<"Ib : "<<IbDC[i]<<','<<"Detune : "<<(omegac[j][0]-omegarf)/2/pi<<std::endl;
-                OMEGAS[k][i][j] = NSolveOMEGA(OMEGA_init0,OMEGA_init,mus[k],nRF,factor[i],R[i],Q[i],omegac[j],nPerBunch[i],r0,eta,Gamma0,T0,Qs,f0,omega0,omegas,epsilon,ps,nBunch, maxIter);
+                OMEGAS[k][i][j] = NSolveOMEGA(OMEGA_init0,OMEGA_init,mus[k],nRF,factor[i],R[i],Q[i],omegac[j],nPerBunch[i],r0,eta,Gamma0,T0,Qs,f0,omega0,omegas,epsilon,ps,nBunch, maxIter,m);
             }
             std::cout<<i+1<<'/'<<nIb<<std::endl;
         }
     }
     auto t_end = omp_get_wtime(); 
     std::cout<<"Iterative solver takes : "<<(t_end-t_start) <<" [s]. "<<std::endl;
+
+#if 0
     t_start = omp_get_wtime();
     for ( int k = 0; k<nMu; ++k){
         for ( int i = 0; i < nIb; ++i){
 #pragma omp parallel for num_threads(OMP_NUM_THREADS)
             for(int  j = 0; j < nDetune; ++j){
-                std::cout<<"Ib : "<<IbDC[i]<<','<<"Detune : "<<(omegac[j][0]-omegarf)/2/pi<<std::endl;
-                approxOMEGAS[k][i][j] = ApproxOMEGA(OMEGA_init0,OMEGA_init,mus[k],nRF,factor[i],R[i],Q[i],omegac[j],nPerBunch[i],r0,eta,Gamma0,T0,Qs,f0,omega0,omegas,epsilon,ps,nBunch, maxIter);
+                //std::cout<<"Ib : "<<IbDC[i]<<','<<"Detune : "<<(omegac[j][0]-omegarf)/2/pi<<std::endl;
+                approxOMEGAS[k][i][j] = ApproxOMEGA(OMEGA_init0,OMEGA_init,mus[k],nRF,factor[i],R[i],Q[i],omegac[j],nPerBunch[i],r0,eta,Gamma0,T0,Qs,f0,omega0,omegas,epsilon,ps,nBunch, maxIter,m);
             }
             std::cout<<i+1<<'/'<<nIb<<std::endl;
         }
     }
     t_end = omp_get_wtime(); 
     std::cout<<"Approximation solver takes : "<<(t_end-t_start) <<" [s]. "<<std::endl;
-
-
+#endif
 
 
     // output
