@@ -20,7 +20,7 @@
 //#include <pstl/numeric>
 #include <parallel/algorithm>
 #include <parallel/numeric>
-#include <gsl/gsl_histogram.h>
+//#include <gsl/gsl_histogram.h>
 
 #include"inputPara.h"
 
@@ -65,7 +65,7 @@ std::complex<double> Err(int ps,int nRF, int i,int nBunch,int mu,int m,
                         std::vector<std::complex<double>> &temp,
                         std::vector<double> &R, std::vector<double> &QL,std::vector<double> &omegac,
                         std::complex<double> OMEGA_Init,
-                        double omega0,double omegas, double factor){
+                        double omega0,double omegas, double factor,double sig_phi){
     // for each point of OMEGA, calculate the p_omegas array
     // then calculate the Zs at that frequency
     // then sum them up and times the 'factor' to it.
@@ -84,7 +84,7 @@ std::complex<double> Err(int ps,int nRF, int i,int nBunch,int mu,int m,
     
     for(int iRF= 0; iRF<nRF; ++iRF){
         for(int j = 0; j<ps*2; ++j){
-            temp[i]+=pow(p_omegas[i][j]/omega0,2*m-1)*Zs[i][j][iRF];
+            temp[i]+=pow(p_omegas[i][j]/omega0,2*m-1)*Zs[i][j][iRF]*exp(-double((-ps+j)*nBunch+mu)*double((-ps+j)*nBunch+mu)*sig_phi*sig_phi);
         }
     }
     temp[i] *= factor*1i;
@@ -95,18 +95,18 @@ std::complex<double> Err(int ps,int nRF, int i,int nBunch,int mu,int m,
 std::complex<double> ApproxOMEGA(std::vector<std::complex<double>> &OMEGA_Init0,std::vector<std::complex<double>> &OMEGA_Init, double mu, double nRF, double factor,
                                     std::vector<double> &R, std::vector<double> &QL,std::vector<double> &omegac,
                                     double nPar,double r0,double eta, double Gamma0,double T0,double Qs, double f0, double omega0, double omegas,
-                                    double epsilon, int ps, int nBunch,int maxIter,int m ){
+                                    double epsilon, double sig_phi,int ps, int nBunch,int maxIter,int m ){
     std::vector<std::complex<double>> temp(OMEGA_Init.size(),std::complex<double>(0,0));
     std::vector<std::vector<std::vector<std::complex<double>>>> Zs(OMEGA_Init.size(),std::vector<std::vector<std::complex<double>>>(ps*2,std::vector<std::complex<double>>(nRF,std::complex<double>(0,0))));
     std::vector<std::vector<std::complex<double>>> p_omegas(OMEGA_Init.size(),std::vector<std::complex<double>>(ps*2,std::complex<double>(0,0))); // the frequency points where we sample the impedance 
     
-    return -Err(ps,nRF,0,nBunch,mu,m,p_omegas,Zs,temp,R,QL,omegac,omegas,omega0,omegas,factor)/2.0/omegas;
+    return -Err(ps,nRF,0,nBunch,mu,m,p_omegas,Zs,temp,R,QL,omegac,omegas,omega0,omegas,factor,sig_phi)/2.0/omegas;
 }
 std::complex<double> NSolveOMEGA(std::vector<std::complex<double>> &OMEGA_Init0,std::vector<std::complex<double>> &OMEGA_Init, 
                                     double mu, double nRF, double factor,
                                     std::vector<double> &R, std::vector<double> &QL,std::vector<double> &omegac,
                                     double nPar,double r0,double eta, double Gamma0,double T0,double Qs, double f0, double omega0, double omegas,
-                                    double epsilon, int ps, int nBunch,int maxIter,int m){
+                                    double epsilon, double sig_phi, int ps, int nBunch,int maxIter,int m){
     std::vector<std::complex<double>> err(OMEGA_Init.size(),std::complex<double>(1e10,0));
     std::vector<std::complex<double>> err1(OMEGA_Init.size(),std::complex<double>(1e10,0));
     std::vector<std::complex<double>> err2(OMEGA_Init.size(),std::complex<double>(1e10,0));
@@ -146,13 +146,13 @@ std::complex<double> NSolveOMEGA(std::vector<std::complex<double>> &OMEGA_Init0,
         OMEGA_2[i] = OMEGA_Init[i];
         while (abs(errRe[i]+1i*errIm[i])>epsilon & nIter<maxIter){
             OMEGA_1[i] = OMEGA_Init[i];
-            err[i] = Err(ps,nRF,i,nBunch,mu,m,p_omegas,Zs,temp,R,QL,omegac,OMEGA_Init[i],omega0,omegas,factor);
+            err[i] = Err(ps,nRF,i,nBunch,mu,m,p_omegas,Zs,temp,R,QL,omegac,OMEGA_Init[i],omega0,omegas,factor,sig_phi);
             errRe[i] = real(err[i]);
             errIm[i] = imag(err[i]);
-            err1[i] = Err(ps,nRF,i,nBunch,mu,m,p_omegas,Zs,temp,R,QL,omegac,OMEGA_Init[i]+sig1,omega0,omegas,factor);
+            err1[i] = Err(ps,nRF,i,nBunch,mu,m,p_omegas,Zs,temp,R,QL,omegac,OMEGA_Init[i]+sig1,omega0,omegas,factor,sig_phi);
             dErr11[i] = (real(err1[i])-errRe[i])/abs(sig1);
             dErr21[i] = (imag(err1[i])-errIm[i])/abs(sig2);
-            err2[i] = Err(ps,nRF,i,nBunch,mu,m,p_omegas,Zs,temp,R,QL,omegac,OMEGA_Init[i]+sig2,omega0,omegas,factor);
+            err2[i] = Err(ps,nRF,i,nBunch,mu,m,p_omegas,Zs,temp,R,QL,omegac,OMEGA_Init[i]+sig2,omega0,omegas,factor,sig_phi);
             dErr12[i] = (real(err2[i])-errRe[i])/abs(sig1);
             dErr22[i] = (imag(err2[i])-errIm[i])/abs(sig2);
             det[i] = dErr11[i]*dErr22[i]-dErr21[i]*dErr12[i];
@@ -577,7 +577,7 @@ int main(){
         nDetune *= n_df[i];
     }
     std::cout<<"Tot # detune : "<<nDetune<<std::endl;
-    std::vector<std::vector<double>> omegac(nDetune,std::vector<double>(nRF,0)); // frequencies of different cavities. 
+    std::vector<std::vector<double>> omegac(nDetune,std::vector<double>(nRF,0)); // set of frequencies of different cavities. 
     std::vector<std::vector<std::vector<std::complex<double>>>> OMEGAS(nMu,std::vector<std::vector<std::complex<double>>>(nIb,std::vector<std::complex<double>>(nDetune,std::complex<double>(0,0)))); //store the solutions for OMEGA
     std::vector<std::vector<std::vector<std::complex<double>>>> approxOMEGAS(nMu,std::vector<std::vector<std::complex<double>>>(nIb,std::vector<std::complex<double>>(nDetune,std::complex<double>(0,0)))); //store the solutions for OMEGA
     
@@ -595,6 +595,7 @@ int main(){
         IbDC[i] = nPerBunch[i]*qe*f0*nBunch;
         pRad[i] = pRad0/IbDC0*IbDC[i];
         factor[i] = nBunch*nPerBunch[i]*r0*eta/Gamma0/T0/T0/T0*4*pi*m/Fact(m-1)/pow(2,m)*pow(sig_phi,2*m-2);
+        std::cout<<"Factor = "<<factor[i]<<std::endl;
         for (int j = 0; j<nRF; ++j){
             Q[i][j] = Vc[j]*Vc[j]/(RoQ_Acc[j]*pRad[i]);
             R[i][j] = RoQ[j]*Q[i][j]*NC[j];
@@ -610,8 +611,8 @@ int main(){
     if(nRF==2){
         for(int i = 0;i<n_df[0];++i){
             for(int j = 0;j<n_df[1];++j){
-                omegac[i*n_df[1]+j][0] = (dfMin[0]+(dfMax[0]-dfMin[0])/n_df[0]*i)*2*pi+omegarf;
-                omegac[i*n_df[1]+j][1] = (dfMin[1]+(dfMax[1]-dfMin[1])/n_df[1]*j)*2*pi+omegarf;
+                omegac[i*n_df[1]+j][0] = (dfMin[0]+(dfMax[0]-dfMin[0])/(n_df[0]-1)*i)*2*pi+omegarf;
+                omegac[i*n_df[1]+j][1] = (dfMin[1]+(dfMax[1]-dfMin[1])/(n_df[1]-1)*j)*2*pi+omegarf;
                 std::cout<<"dfC: "<<(omegac[i*n_df[1]+j][0]-omegarf)/2/pi<<','<<(omegac[i*n_df[1]+j][1]-omegarf)/2/pi<<std::endl;
             }
         }
@@ -633,13 +634,13 @@ int main(){
     auto t_start = omp_get_wtime(); 
     
     for ( int k = 0; k<nMu; ++k){
-
+        std::cout<<"Calculating mu = "<<k<<std::endl;
         for ( int i = 0; i < nIb; ++i){
 #pragma omp parallel for num_threads(OMP_NUM_THREADS)
             for(int  j = 0; j < nDetune; ++j){
                 std::vector<std::complex<double>> OMEGA_init(nOmegaGuess,std::complex<double>(0,0)); // initial guess for OMEGA, for calculation
                 //std::cout<<"Ib : "<<IbDC[i]<<','<<"Detune : "<<(omegac[j][0]-omegarf)/2/pi<<std::endl;
-                OMEGAS[k][i][j] = NSolveOMEGA(OMEGA_init0,OMEGA_init,mus[k],nRF,factor[i],R[i],Q[i],omegac[j],nPerBunch[i],r0,eta,Gamma0,T0,Qs,f0,omega0,omegas,epsilon,ps,nBunch, maxIter,m);
+                OMEGAS[k][i][j] = NSolveOMEGA(OMEGA_init0,OMEGA_init,mus[k],nRF,factor[i],R[i],Q[i],omegac[j],nPerBunch[i],r0,eta,Gamma0,T0,Qs,f0,omega0,omegas,epsilon,sig_phi,ps,nBunch, maxIter,m);
             }
             std::cout<<i+1<<'/'<<nIb<<std::endl;
         }
@@ -665,45 +666,91 @@ int main(){
 
 
     // output
-    std::ofstream ImOmegafile;
     // first write the header which is the detune.
-    for ( int k = 0; k<nMu; ++k){
-        ImOmegafile.open ("ImOmega"+std::to_string(int(mus[k]))+".txt",std::ios::out);
-        for(int iRF = 0;iRF<nRF;++iRF){
-            for( int j = 0; j < nDetune; ++j){
-                ImOmegafile<<(omegac[j][iRF]-omegarf)/2/pi<<',';
+    if(nRF==1){
+        std::ofstream ImOmegafile;
+        for ( int k = 0; k<nMu; ++k){
+                ImOmegafile.open ("ImOmega"+std::to_string(int(mus[k]))+".txt",std::ios::out);
+
+                for(int iRF = 0;iRF<nRF;++iRF){
+                    //ImOmegafile<<'x'<<',';
+                    for( int j = 0; j < nDetune; ++j){
+                        ImOmegafile<<(omegac[j][iRF]-omegarf)/2/pi<<',';
+                    }
+                    ImOmegafile<<std::endl;
+                }
+                for ( int i = 0; i < nIb; ++i){
+                    ImOmegafile<<IbDC[i]<<',';
+                    for( int j = 0; j < nDetune; ++j){
+                        ImOmegafile<<OMEGAS[k][i][j].imag()<<',';
+                    }
+                    ImOmegafile<<std::endl;
+                }
+                ImOmegafile.close();
+            }
+        std::ofstream ReOmegafile;
+        // first write the header which is the detune.
+        for ( int k = 0; k<nMu; ++k){
+            ReOmegafile.open ("ReOmega"+std::to_string(int(mus[k]))+".txt",std::ios::out);
+            for(int iRF = 0;iRF<nRF;++iRF){
+                for( int j = 0; j < nDetune; ++j){
+                    ReOmegafile<<(omegac[j][iRF]-omegarf)/2/pi<<',';
+                }
+                ReOmegafile<<std::endl;
+            }
+            
+            for ( int i = 0; i < nIb; ++i){
+                ReOmegafile<<IbDC[i]<<',';
+                for( int j = 0; j < nDetune; ++j){
+                    ReOmegafile<<OMEGAS[k][i][j].real()<<',';
+                }
+                ReOmegafile<<std::endl;
+            }
+            ReOmegafile.close();
+    }
+    }
+    
+
+    // write the data in the table format with colums equal to df of first RF and index is df of second RF
+    if(nRF==2 && nIb==1){
+        std::ofstream ImOmegafile;
+        for ( int k = 0; k<nMu; ++k){
+            ImOmegafile.open ("ImOmega"+std::to_string(int(mus[k]))+".txt",std::ios::out);
+            ImOmegafile<<IbDC[0]<<',';
+            for( int df0 = 0; df0 < n_df[0]; ++df0){
+                ImOmegafile<<(omegac[df0*n_df[1]][0]-omegarf)/2/pi<<',';
             }
             ImOmegafile<<std::endl;
-        }
-        for ( int i = 0; i < nIb; ++i){
-            ImOmegafile<<IbDC[i]<<',';
-            for( int j = 0; j < nDetune; ++j){
-                ImOmegafile<<OMEGAS[k][i][j].imag()<<',';
+            for( int df1 = 0; df1 < n_df[1]; ++df1){
+                ImOmegafile<<(omegac[df1][1]-omegarf)/2/pi<<',';
+                for(int df0 = 0;df0<n_df[0];++df0){
+                    ImOmegafile<<OMEGAS[k][0][df0*n_df[1]+df1].imag()<<',';
+                }
+                ImOmegafile<<std::endl;
             }
-            ImOmegafile<<std::endl;
+            ImOmegafile.close();
         }
-        ImOmegafile.close();
-    }
-    std::ofstream ReOmegafile;
-    // first write the header which is the detune.
-    for ( int k = 0; k<nMu; ++k){
-        ReOmegafile.open ("ReOmega"+std::to_string(int(mus[k]))+".txt",std::ios::out);
-        for(int iRF = 0;iRF<nRF;++iRF){
-            for( int j = 0; j < nDetune; ++j){
-                ReOmegafile<<(omegac[j][iRF]-omegarf)/2/pi<<',';
+        std::ofstream ReOmegafile;
+        for ( int k = 0; k<nMu; ++k){
+            ReOmegafile.open ("ReOmega"+std::to_string(int(mus[k]))+".txt",std::ios::out);
+            ReOmegafile<<IbDC[0]<<',';
+            for( int df0 = 0; df0 < n_df[0]; ++df0){
+                ReOmegafile<<(omegac[df0*n_df[1]][0]-omegarf)/2/pi<<',';
             }
             ReOmegafile<<std::endl;
-        }
-        
-        for ( int i = 0; i < nIb; ++i){
-            ReOmegafile<<IbDC[i]<<',';
-            for( int j = 0; j < nDetune; ++j){
-                ReOmegafile<<OMEGAS[k][i][j].real()<<',';
+            for( int df1 = 0; df1 < n_df[1]; ++df1){
+                ReOmegafile<<(omegac[df1][1]-omegarf)/2/pi<<',';
+                for(int df0 = 0;df0<n_df[0];++df0){
+                    ReOmegafile<<OMEGAS[k][0][df0*n_df[1]+df1].real()<<',';
+                }
+                ReOmegafile<<std::endl;
             }
-            ReOmegafile<<std::endl;
+            ReOmegafile.close();
         }
-        ReOmegafile.close();
     }
+    
+    
+#if 0
     // output
     std::ofstream ApproxImOmegafile;
     // first write the header which is the detune.
@@ -737,6 +784,7 @@ int main(){
         }
         ReOmegafile.close();
     }
+#endif
 #if 0
     std::cout<<f0<<std::endl;
     std::cout<<Vs0<<std::endl;
